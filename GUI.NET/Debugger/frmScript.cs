@@ -1,4 +1,8 @@
-﻿using System;
+﻿using FastColoredTextBoxNS;
+using Mesen.GUI.Config;
+using Mesen.GUI.Forms;
+using Mesen.GUI.Properties;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
@@ -6,512 +10,575 @@ using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Linq;
-using System.Reflection;
 using System.Text;
-using System.Threading.Tasks;
 using System.Windows.Forms;
-using FastColoredTextBoxNS;
-using Mesen.GUI.Config;
-using Mesen.GUI.Controls;
-using Mesen.GUI.Forms;
-using Mesen.GUI.Properties;
 
 namespace Mesen.GUI.Debugger
 {
-	public partial class frmScript : BaseForm
-	{
-		private InteropEmu.NotificationListener _notifListener;
-		private int _scriptId = -1;
-		private string _filePath = null;
-		private DateTime _lastTimestamp = DateTime.MinValue;
-		private AutocompleteMenu _popupMenu;
-		private string _originalText = "";
-		private string _builtInScriptName = null;
+   public partial class frmScript : BaseForm
+   {
+	  private InteropEmu.NotificationListener _notifListener;
+	  private int _scriptId = -1;
+	  private string _filePath = null;
+	  private DateTime _lastTimestamp = DateTime.MinValue;
+	  private AutocompleteMenu _popupMenu;
+	  private string _originalText = "";
+	  private string _builtInScriptName = null;
 
-		public frmScript(bool forceBlank = false)
-		{
-			InitializeComponent();
-			ThemeHelper.ExcludeFromTheme(txtScriptContent);
-			txtScriptContent.ForeColor = Color.Black;
+	  public frmScript(bool forceBlank = false)
+	  {
+		 InitializeComponent();
+		 ThemeHelper.ExcludeFromTheme(txtScriptContent);
+		 txtScriptContent.ForeColor = Color.Black;
 
-			DebugInfo.ApplyConfig();
+		 DebugInfo.ApplyConfig();
 
-			List<string> builtInScripts = new List<string> { "DmcCapture.lua", "DrawMode.lua", "Example.lua", "GameBoyMode.lua", "Grid.lua", "LogParallax.lua", "ModifyScreen.lua", "NtscSafeArea.lua", "ReverseMode.lua", "SpriteBox.lua" };
-			foreach(string script in builtInScripts) {
-				ToolStripItem item = mnuBuiltInScripts.DropDownItems.Add(script);
-				item.Click += (s, e) => {
-					LoadBuiltInScript(item.Text);
-				};
-			}
-
-			tsToolbar.AddItemsToToolbar(
-				mnuOpen, mnuSave, null,
-				mnuRun, mnuStop, null,
-				mnuBuiltInScripts
-			);
-
-			DebugInfo config = ConfigManager.Config.DebugInfo;
-
-			_popupMenu = new AutocompleteMenu(txtScriptContent, this);
-			_popupMenu.ImageList = new ImageList();
-			_popupMenu.ImageList.Images.Add(Resources.Enum);
-			_popupMenu.ImageList.Images.Add(Resources.Function);
-			_popupMenu.SelectedColor = Color.LightBlue;
-			_popupMenu.SearchPattern = @"[\w\.]";
-
-			List<AutocompleteItem> items = new List<AutocompleteItem>();
-			_availableFunctions.Sort((a, b) => {
-				int type = a[0].CompareTo(b[0]);
-				if(type == 0) {
-					return a[1].CompareTo(b[1]);
-				} else {
-					return -type;
-				}
-			});
-
-			foreach(List<string> item in _availableFunctions) {
-				MethodAutocompleteItem autocompleteItem = new MethodAutocompleteItem(item[1]);
-				autocompleteItem.ImageIndex = item[0] == "func" ? 1 : 0;
-				autocompleteItem.ToolTipTitle = item[2];
-				if(!string.IsNullOrWhiteSpace(item[3])) {
-					autocompleteItem.ToolTipText = "Parameters" + Environment.NewLine + item[3] + Environment.NewLine + Environment.NewLine;
-				}
-				if(!string.IsNullOrWhiteSpace(item[4])) {
-					autocompleteItem.ToolTipText += "Return Value" + Environment.NewLine + item[4] + Environment.NewLine + Environment.NewLine;
-				}
-				if(!string.IsNullOrWhiteSpace(item[5])) {
-					autocompleteItem.ToolTipText += "Description" + Environment.NewLine + item[5] + Environment.NewLine + Environment.NewLine;
-				}
-				items.Add(autocompleteItem);
-			}
-
-			_popupMenu.Items.SetAutocompleteItems(items);
-
-			UpdateRecentScripts();
-			
-			mnuTutorialScript.Checked = config.ScriptStartupBehavior == ScriptStartupBehavior.ShowTutorial;
-			mnuBlankWindow.Checked = config.ScriptStartupBehavior == ScriptStartupBehavior.ShowBlankWindow;
-			mnuAutoLoadLastScript.Checked = config.ScriptStartupBehavior == ScriptStartupBehavior.LoadLastScript;
-			
-			if(!forceBlank) {
-				if(mnuAutoLoadLastScript.Checked && mnuRecentScripts.DropDownItems.Count > 0) {
-					string scriptToLoad = config.RecentScripts.Where((s) => File.Exists(s)).FirstOrDefault();
-					if(scriptToLoad != null) {
-						LoadScriptFile(scriptToLoad, false);
-					}
-				} else if(mnuTutorialScript.Checked) {
-					LoadBuiltInScript("Example.lua");
-				}
-			}
-
-			RestoreLocation(config.ScriptWindowLocation, config.ScriptWindowSize);
-			mnuSaveBeforeRun.Checked = config.SaveScriptBeforeRun;
-			mnuAutoRestart.Checked = config.AutoRestartScript;
-
-			if(config.ScriptCodeWindowHeight >= ctrlSplit.Panel1MinSize) {
-				if(config.ScriptCodeWindowHeight == Int32.MaxValue) {
-					ctrlSplit.CollapsePanel();
-				} else {
-					ctrlSplit.SplitterDistance = config.ScriptCodeWindowHeight;
-				}
-			}
-
-			txtScriptContent.Font = new Font(config.ScriptFontFamily, config.ScriptFontSize, config.ScriptFontStyle);
-			txtScriptContent.Zoom = config.ScriptZoom;
-		}
-
-		protected override void OnLoad(EventArgs e)
-		{
-			base.OnLoad(e);
-			this._notifListener = new InteropEmu.NotificationListener(ConfigManager.Config.DebugInfo.DebugConsoleId);
-			this._notifListener.OnNotification += this._notifListener_OnNotification;
-
-			this.InitShortcuts();
-		}
-
-		private void InitShortcuts()
-		{
-			mnuOpen.InitShortcut(this, nameof(DebuggerShortcutsConfig.ScriptWindow_OpenScript));
-			mnuSave.InitShortcut(this, nameof(DebuggerShortcutsConfig.ScriptWindow_SaveScript));
-			mnuNewScript.InitShortcut(this, nameof(DebuggerShortcutsConfig.OpenScriptWindow));
-			mnuRun.InitShortcut(this, nameof(DebuggerShortcutsConfig.ScriptWindow_RunScript));
-			mnuStop.InitShortcut(this, nameof(DebuggerShortcutsConfig.ScriptWindow_StopScript));
-
-			mnuIncreaseFontSize.InitShortcut(this, nameof(DebuggerShortcutsConfig.IncreaseFontSize));
-			mnuDecreaseFontSize.InitShortcut(this, nameof(DebuggerShortcutsConfig.DecreaseFontSize));
-			mnuResetFontSize.InitShortcut(this, nameof(DebuggerShortcutsConfig.ResetFontSize));
-
-			mnuPaste.InitShortcut(this, nameof(DebuggerShortcutsConfig.Paste));
-			mnuCopy.InitShortcut(this, nameof(DebuggerShortcutsConfig.Copy));
-			mnuCut.InitShortcut(this, nameof(DebuggerShortcutsConfig.Cut));
-			mnuSelectAll.InitShortcut(this, nameof(DebuggerShortcutsConfig.SelectAll));
-		}
-
-		private void _notifListener_OnNotification(InteropEmu.NotificationEventArgs e)
-		{
-			switch(e.NotificationType) {
-				case InteropEmu.ConsoleNotificationType.EmulationStopped:
-					this._scriptId = -1;
-					break;
-
-				case InteropEmu.ConsoleNotificationType.GameStopped:
-					if(e.Parameter == IntPtr.Zero) {
-						this._scriptId = -1;
-					}
-					break;
-
-				case InteropEmu.ConsoleNotificationType.GameInitCompleted:
-					bool wasRunning = this._scriptId >= 0;
-					this._scriptId = -1;
-					this.BeginInvoke((Action)(() => {
-						lblScriptActive.Visible = false;
-						if(e.NotificationType == InteropEmu.ConsoleNotificationType.GameInitCompleted && wasRunning && mnuAutoRestart.Checked) {
-							RunScript();
-						}
-					}));
-					break;
-			}
-		}
-
-		protected override void OnClosing(CancelEventArgs e)
-		{
-			if(!SavePrompt()) {
-				e.Cancel = true;
-				return;
-			}
-			
-			if(_scriptId >= 0) {
-				InteropEmu.DebugRemoveScript(_scriptId);
-			}
-			ConfigManager.Config.DebugInfo.ScriptWindowSize = this.WindowState != FormWindowState.Normal ? this.RestoreBounds.Size : this.Size;
-			ConfigManager.Config.DebugInfo.ScriptWindowLocation = this.WindowState != FormWindowState.Normal ? this.RestoreBounds.Location : this.Location;
-			ConfigManager.Config.DebugInfo.SaveScriptBeforeRun = mnuSaveBeforeRun.Checked;
-			if(mnuAutoLoadLastScript.Checked) {
-				ConfigManager.Config.DebugInfo.ScriptStartupBehavior = ScriptStartupBehavior.LoadLastScript;
-			} else if(mnuTutorialScript.Checked) {
-				ConfigManager.Config.DebugInfo.ScriptStartupBehavior = ScriptStartupBehavior.ShowTutorial;
-			} else {
-				ConfigManager.Config.DebugInfo.ScriptStartupBehavior = ScriptStartupBehavior.ShowBlankWindow;
-			}
-			ConfigManager.Config.DebugInfo.ScriptCodeWindowHeight = ctrlSplit.Panel2.Height <= 2 ? Int32.MaxValue : ctrlSplit.SplitterDistance;
-			ConfigManager.Config.DebugInfo.ScriptZoom = txtScriptContent.Zoom;
-			ConfigManager.Config.DebugInfo.ScriptFontFamily = txtScriptContent.OriginalFont.FontFamily.Name;
-			ConfigManager.Config.DebugInfo.ScriptFontStyle = txtScriptContent.OriginalFont.Style;
-			ConfigManager.Config.DebugInfo.ScriptFontSize = txtScriptContent.OriginalFont.Size;
-			ConfigManager.Config.DebugInfo.AutoLoadLastScript = mnuAutoLoadLastScript.Checked;
-			ConfigManager.Config.DebugInfo.AutoRestartScript = mnuAutoRestart.Checked;
-			ConfigManager.ApplyChanges();
-
-			base.OnClosing(e);
-		}
-
-		private void LoadScript()
-		{
-			using(OpenFileDialog ofd = new OpenFileDialog()) {
-				ofd.SetFilter("Lua scripts (*.lua)|*.lua");
-				if(ConfigManager.Config.DebugInfo.RecentScripts.Count > 0) {
-					ofd.InitialDirectory = Path.GetDirectoryName(ConfigManager.Config.DebugInfo.RecentScripts[0]);
-				}
-				if(ofd.ShowDialog() == DialogResult.OK) {
-					LoadScriptFile(ofd.FileName);
-				}
-			}
-		}
-
-		private bool SavePrompt()
-		{
-			if(_originalText != txtScriptContent.Text) {
-				DialogResult result = MessageBox.Show("You have unsaved changes for this script - would you like to save them?", "Script Window", MessageBoxButtons.YesNoCancel);
-				if((result == DialogResult.Yes && !SaveScript()) || result == DialogResult.Cancel) {
-					return false;
-				}
-			}
-			return true;
-		}
-		
-		private void LoadBuiltInScript(string name)
-		{
-			if(!SavePrompt()) {
-				return;
-			}
-
-			this.Text = $"{name} - Script Window";
-			txtScriptContent.Text = ResourceManager.ReadZippedResource(name);
-			_originalText = txtScriptContent.Text;
-			_filePath = null;
-			_builtInScriptName = name;
-			txtScriptContent.ClearUndo();
-		}
-
-		public void LoadScriptFile(string filepath, bool runScript = true, bool disableSavePrompt = false)
-		{
-			if(File.Exists(filepath)) {
-				if(!disableSavePrompt && !SavePrompt()) {
-					return;
-				}
-				string content = File.ReadAllText(filepath);
-				SetFilePath(filepath);
-				txtScriptContent.Text = content;
-				txtScriptContent.ClearUndo();
-				ConfigManager.Config.DebugInfo.AddRecentScript(filepath);
-				UpdateRecentScripts();
-				if(runScript) {
-					RunScript();
-				}
-
-				_originalText = txtScriptContent.Text;
-				_lastTimestamp = File.GetLastWriteTime(filepath);
-			}
-		}
-
-		private void UpdateRecentScripts()
-		{
-			mnuRecentScripts.DropDownItems.Clear();
-			foreach(string recentScript in ConfigManager.Config.DebugInfo.RecentScripts) {
-				if(File.Exists(recentScript)) {
-					ToolStripMenuItem tsmi = new ToolStripMenuItem();
-					tsmi.Text = Path.GetFileName(recentScript);
-					tsmi.Click += (object sender, EventArgs args) => {
-						LoadScriptFile(recentScript);
-					};
-					mnuRecentScripts.DropDownItems.Add(tsmi);
-				}
-			}
-
-			mnuRecentScripts.Enabled = mnuRecentScripts.DropDownItems.Count > 0;
-		}
-
-		private string ScriptName
-		{
-			get
+		 List<string> builtInScripts = new List<string> { "DmcCapture.lua", "DrawMode.lua", "Example.lua", "GameBoyMode.lua", "Grid.lua", "LogParallax.lua", "ModifyScreen.lua", "NtscSafeArea.lua", "ReverseMode.lua", "SpriteBox.lua" };
+		 foreach (string script in builtInScripts)
+		 {
+			ToolStripItem item = mnuBuiltInScripts.DropDownItems.Add(script);
+			item.Click += (s, e) =>
 			{
-				if(_filePath != null) {
-					return Path.GetFileName(_filePath);
-				} else if(_builtInScriptName != null) {
-					return _builtInScriptName;
-				} else {
-					return "unnamed.lua";
-				}
+			   LoadBuiltInScript(item.Text);
+			};
+		 }
+
+		 tsToolbar.AddItemsToToolbar(
+			 mnuOpen, mnuSave, null,
+			 mnuRun, mnuStop, null,
+			 mnuBuiltInScripts
+		 );
+
+		 DebugInfo config = ConfigManager.Config.DebugInfo;
+
+		 _popupMenu = new AutocompleteMenu(txtScriptContent, this);
+		 _popupMenu.ImageList = new ImageList();
+		 _popupMenu.ImageList.Images.Add(Resources.Enum);
+		 _popupMenu.ImageList.Images.Add(Resources.Function);
+		 _popupMenu.SelectedColor = Color.LightBlue;
+		 _popupMenu.SearchPattern = @"[\w\.]";
+
+		 List<AutocompleteItem> items = new List<AutocompleteItem>();
+		 _availableFunctions.Sort((a, b) =>
+		 {
+			int type = a[0].CompareTo(b[0]);
+			if (type == 0)
+			{
+			   return a[1].CompareTo(b[1]);
 			}
-		}
+			else
+			{
+			   return -type;
+			}
+		 });
 
-		private void RunScript()
-		{
-			if(_filePath != null && mnuSaveBeforeRun.Checked && txtScriptContent.UndoEnabled) {
-				txtScriptContent.SaveToFile(_filePath, Encoding.UTF8);
+		 foreach (List<string> item in _availableFunctions)
+		 {
+			MethodAutocompleteItem autocompleteItem = new MethodAutocompleteItem(item[1]);
+			autocompleteItem.ImageIndex = item[0] == "func" ? 1 : 0;
+			autocompleteItem.ToolTipTitle = item[2];
+			if (!string.IsNullOrWhiteSpace(item[3]))
+			{
+			   autocompleteItem.ToolTipText = "Parameters" + Environment.NewLine + item[3] + Environment.NewLine + Environment.NewLine;
+			}
+			if (!string.IsNullOrWhiteSpace(item[4]))
+			{
+			   autocompleteItem.ToolTipText += "Return Value" + Environment.NewLine + item[4] + Environment.NewLine + Environment.NewLine;
+			}
+			if (!string.IsNullOrWhiteSpace(item[5]))
+			{
+			   autocompleteItem.ToolTipText += "Description" + Environment.NewLine + item[5] + Environment.NewLine + Environment.NewLine;
+			}
+			items.Add(autocompleteItem);
+		 }
+
+		 _popupMenu.Items.SetAutocompleteItems(items);
+
+		 UpdateRecentScripts();
+
+		 mnuTutorialScript.Checked = config.ScriptStartupBehavior == ScriptStartupBehavior.ShowTutorial;
+		 mnuBlankWindow.Checked = config.ScriptStartupBehavior == ScriptStartupBehavior.ShowBlankWindow;
+		 mnuAutoLoadLastScript.Checked = config.ScriptStartupBehavior == ScriptStartupBehavior.LoadLastScript;
+
+		 if (!forceBlank)
+		 {
+			if (mnuAutoLoadLastScript.Checked && mnuRecentScripts.DropDownItems.Count > 0)
+			{
+			   string scriptToLoad = config.RecentScripts.Where((s) => File.Exists(s)).FirstOrDefault();
+			   if (scriptToLoad != null)
+			   {
+				  LoadScriptFile(scriptToLoad, false);
+			   }
+			}
+			else if (mnuTutorialScript.Checked)
+			{
+			   LoadBuiltInScript("Example.lua");
+			}
+		 }
+
+		 RestoreLocation(config.ScriptWindowLocation, config.ScriptWindowSize);
+		 mnuSaveBeforeRun.Checked = config.SaveScriptBeforeRun;
+		 mnuAutoRestart.Checked = config.AutoRestartScript;
+
+		 if (config.ScriptCodeWindowHeight >= ctrlSplit.Panel1MinSize)
+		 {
+			if (config.ScriptCodeWindowHeight == Int32.MaxValue)
+			{
+			   ctrlSplit.CollapsePanel();
+			}
+			else
+			{
+			   ctrlSplit.SplitterDistance = config.ScriptCodeWindowHeight;
+			}
+		 }
+
+		 txtScriptContent.Font = new Font(config.ScriptFontFamily, config.ScriptFontSize, config.ScriptFontStyle);
+		 txtScriptContent.Zoom = config.ScriptZoom;
+	  }
+
+	  protected override void OnLoad(EventArgs e)
+	  {
+		 base.OnLoad(e);
+		 this._notifListener = new InteropEmu.NotificationListener(ConfigManager.Config.DebugInfo.DebugConsoleId);
+		 this._notifListener.OnNotification += this._notifListener_OnNotification;
+
+		 this.InitShortcuts();
+	  }
+
+	  private void InitShortcuts()
+	  {
+		 mnuOpen.InitShortcut(this, nameof(DebuggerShortcutsConfig.ScriptWindow_OpenScript));
+		 mnuSave.InitShortcut(this, nameof(DebuggerShortcutsConfig.ScriptWindow_SaveScript));
+		 mnuNewScript.InitShortcut(this, nameof(DebuggerShortcutsConfig.OpenScriptWindow));
+		 mnuRun.InitShortcut(this, nameof(DebuggerShortcutsConfig.ScriptWindow_RunScript));
+		 mnuStop.InitShortcut(this, nameof(DebuggerShortcutsConfig.ScriptWindow_StopScript));
+
+		 mnuIncreaseFontSize.InitShortcut(this, nameof(DebuggerShortcutsConfig.IncreaseFontSize));
+		 mnuDecreaseFontSize.InitShortcut(this, nameof(DebuggerShortcutsConfig.DecreaseFontSize));
+		 mnuResetFontSize.InitShortcut(this, nameof(DebuggerShortcutsConfig.ResetFontSize));
+
+		 mnuPaste.InitShortcut(this, nameof(DebuggerShortcutsConfig.Paste));
+		 mnuCopy.InitShortcut(this, nameof(DebuggerShortcutsConfig.Copy));
+		 mnuCut.InitShortcut(this, nameof(DebuggerShortcutsConfig.Cut));
+		 mnuSelectAll.InitShortcut(this, nameof(DebuggerShortcutsConfig.SelectAll));
+	  }
+
+	  private void _notifListener_OnNotification(InteropEmu.NotificationEventArgs e)
+	  {
+		 switch (e.NotificationType)
+		 {
+			case InteropEmu.ConsoleNotificationType.EmulationStopped:
+			   this._scriptId = -1;
+			   break;
+
+			case InteropEmu.ConsoleNotificationType.GameStopped:
+			   if (e.Parameter == IntPtr.Zero)
+			   {
+				  this._scriptId = -1;
+			   }
+			   break;
+
+			case InteropEmu.ConsoleNotificationType.GameInitCompleted:
+			   bool wasRunning = this._scriptId >= 0;
+			   this._scriptId = -1;
+			   this.BeginInvoke((Action)(() =>
+			   {
+				  lblScriptActive.Visible = false;
+				  if (e.NotificationType == InteropEmu.ConsoleNotificationType.GameInitCompleted && wasRunning && mnuAutoRestart.Checked)
+				  {
+					 RunScript();
+				  }
+			   }));
+			   break;
+		 }
+	  }
+
+	  protected override void OnClosing(CancelEventArgs e)
+	  {
+		 if (!SavePrompt())
+		 {
+			e.Cancel = true;
+			return;
+		 }
+
+		 if (_scriptId >= 0)
+		 {
+			InteropEmu.DebugRemoveScript(_scriptId);
+		 }
+		 ConfigManager.Config.DebugInfo.ScriptWindowSize = this.WindowState != FormWindowState.Normal ? this.RestoreBounds.Size : this.Size;
+		 ConfigManager.Config.DebugInfo.ScriptWindowLocation = this.WindowState != FormWindowState.Normal ? this.RestoreBounds.Location : this.Location;
+		 ConfigManager.Config.DebugInfo.SaveScriptBeforeRun = mnuSaveBeforeRun.Checked;
+		 if (mnuAutoLoadLastScript.Checked)
+		 {
+			ConfigManager.Config.DebugInfo.ScriptStartupBehavior = ScriptStartupBehavior.LoadLastScript;
+		 }
+		 else if (mnuTutorialScript.Checked)
+		 {
+			ConfigManager.Config.DebugInfo.ScriptStartupBehavior = ScriptStartupBehavior.ShowTutorial;
+		 }
+		 else
+		 {
+			ConfigManager.Config.DebugInfo.ScriptStartupBehavior = ScriptStartupBehavior.ShowBlankWindow;
+		 }
+		 ConfigManager.Config.DebugInfo.ScriptCodeWindowHeight = ctrlSplit.Panel2.Height <= 2 ? Int32.MaxValue : ctrlSplit.SplitterDistance;
+		 ConfigManager.Config.DebugInfo.ScriptZoom = txtScriptContent.Zoom;
+		 ConfigManager.Config.DebugInfo.ScriptFontFamily = txtScriptContent.OriginalFont.FontFamily.Name;
+		 ConfigManager.Config.DebugInfo.ScriptFontStyle = txtScriptContent.OriginalFont.Style;
+		 ConfigManager.Config.DebugInfo.ScriptFontSize = txtScriptContent.OriginalFont.Size;
+		 ConfigManager.Config.DebugInfo.AutoLoadLastScript = mnuAutoLoadLastScript.Checked;
+		 ConfigManager.Config.DebugInfo.AutoRestartScript = mnuAutoRestart.Checked;
+		 ConfigManager.ApplyChanges();
+
+		 base.OnClosing(e);
+	  }
+
+	  private void LoadScript()
+	  {
+		 using (OpenFileDialog ofd = new OpenFileDialog())
+		 {
+			ofd.SetFilter("Lua scripts (*.lua)|*.lua");
+			if (ConfigManager.Config.DebugInfo.RecentScripts.Count > 0)
+			{
+			   ofd.InitialDirectory = Path.GetDirectoryName(ConfigManager.Config.DebugInfo.RecentScripts[0]);
+			}
+			if (ofd.ShowDialog() == DialogResult.OK)
+			{
+			   LoadScriptFile(ofd.FileName);
+			}
+		 }
+	  }
+
+	  private bool SavePrompt()
+	  {
+		 if (_originalText != txtScriptContent.Text)
+		 {
+			DialogResult result = MessageBox.Show("You have unsaved changes for this script - would you like to save them?", "Script Window", MessageBoxButtons.YesNoCancel);
+			if ((result == DialogResult.Yes && !SaveScript()) || result == DialogResult.Cancel)
+			{
+			   return false;
+			}
+		 }
+		 return true;
+	  }
+
+	  private void LoadBuiltInScript(string name)
+	  {
+		 if (!SavePrompt())
+		 {
+			return;
+		 }
+
+		 this.Text = $"{name} - Script Window";
+		 txtScriptContent.Text = ResourceManager.ReadZippedResource(name);
+		 _originalText = txtScriptContent.Text;
+		 _filePath = null;
+		 _builtInScriptName = name;
+		 txtScriptContent.ClearUndo();
+	  }
+
+	  public void LoadScriptFile(string filepath, bool runScript = true, bool disableSavePrompt = false)
+	  {
+		 if (File.Exists(filepath))
+		 {
+			if (!disableSavePrompt && !SavePrompt())
+			{
+			   return;
+			}
+			string content = File.ReadAllText(filepath);
+			SetFilePath(filepath);
+			txtScriptContent.Text = content;
+			txtScriptContent.ClearUndo();
+			ConfigManager.Config.DebugInfo.AddRecentScript(filepath);
+			UpdateRecentScripts();
+			if (runScript)
+			{
+			   RunScript();
 			}
 
-			_scriptId = InteropEmu.DebugLoadScript(ScriptName, txtScriptContent.Text, _scriptId);
-			if(_scriptId < 0) {
-				MessageBox.Show("Error while loading script.");
-			} else {
-				lblScriptActive.Visible = true;
+			_originalText = txtScriptContent.Text;
+			_lastTimestamp = File.GetLastWriteTime(filepath);
+		 }
+	  }
+
+	  private void UpdateRecentScripts()
+	  {
+		 mnuRecentScripts.DropDownItems.Clear();
+		 foreach (string recentScript in ConfigManager.Config.DebugInfo.RecentScripts)
+		 {
+			if (File.Exists(recentScript))
+			{
+			   ToolStripMenuItem tsmi = new ToolStripMenuItem();
+			   tsmi.Text = Path.GetFileName(recentScript);
+			   tsmi.Click += (object sender, EventArgs args) =>
+			   {
+				  LoadScriptFile(recentScript);
+			   };
+			   mnuRecentScripts.DropDownItems.Add(tsmi);
 			}
-		}
+		 }
 
-		private void StopScript()
-		{
-			if(_scriptId >= 0) {
-				InteropEmu.DebugRemoveScript(_scriptId);
-				lblScriptActive.Visible = false;
-				_scriptId = -1;
+		 mnuRecentScripts.Enabled = mnuRecentScripts.DropDownItems.Count > 0;
+	  }
+
+	  private string ScriptName
+	  {
+		 get
+		 {
+			if (_filePath != null)
+			{
+			   return Path.GetFileName(_filePath);
 			}
-		}
-
-		private bool SaveScript()
-		{
-			if(_filePath != null && txtScriptContent.UndoEnabled) {
-				txtScriptContent.SaveToFile(_filePath, Encoding.UTF8);
-				_originalText = txtScriptContent.Text;
-				return true;
-			} else {
-				return SaveAs("NewScript.lua");
+			else if (_builtInScriptName != null)
+			{
+			   return _builtInScriptName;
 			}
-		}
-
-		private bool SaveAs(string newName)
-		{
-			using(SaveFileDialog sfd = new SaveFileDialog()) {
-				sfd.FileName = newName;
-				if(ConfigManager.Config.DebugInfo.RecentScripts.Count > 0) {
-					sfd.InitialDirectory = Path.GetDirectoryName(ConfigManager.Config.DebugInfo.RecentScripts[0]);
-				}
-				sfd.SetFilter("Lua scripts (*.lua)|*.lua");
-				if(sfd.ShowDialog() == DialogResult.OK) {
-					SetFilePath(sfd.FileName);
-					txtScriptContent.SaveToFile(_filePath, Encoding.UTF8);
-					ConfigManager.Config.DebugInfo.AddRecentScript(sfd.FileName);
-					UpdateRecentScripts();
-					_originalText = txtScriptContent.Text;
-					_builtInScriptName = null;
-					return true;
-				}
+			else
+			{
+			   return "unnamed.lua";
 			}
-			return false;
-		}
+		 }
+	  }
 
-		private void SetFilePath(string filePath)
-		{
-			_filePath = filePath;
-			this.Text = $"{Path.GetFileName(_filePath)} - Script Window";
-		}
+	  private void RunScript()
+	  {
+		 if (_filePath != null && mnuSaveBeforeRun.Checked && txtScriptContent.UndoEnabled)
+		 {
+			txtScriptContent.SaveToFile(_filePath, Encoding.UTF8);
+		 }
 
-		private void mnuOpen_Click(object sender, EventArgs e)
-		{
-			LoadScript();
-		}
+		 _scriptId = InteropEmu.DebugLoadScript(ScriptName, txtScriptContent.Text, _scriptId);
+		 if (_scriptId < 0)
+		 {
+			MessageBox.Show("Error while loading script.");
+		 }
+		 else
+		 {
+			lblScriptActive.Visible = true;
+		 }
+	  }
 
-		private void mnuClose_Click(object sender, EventArgs e)
-		{
-			this.Close();
-		}
+	  private void StopScript()
+	  {
+		 if (_scriptId >= 0)
+		 {
+			InteropEmu.DebugRemoveScript(_scriptId);
+			lblScriptActive.Visible = false;
+			_scriptId = -1;
+		 }
+	  }
 
-		private void mnuRun_Click(object sender, EventArgs e)
-		{
-			RunScript();
-		}
+	  private bool SaveScript()
+	  {
+		 if (_filePath != null && txtScriptContent.UndoEnabled)
+		 {
+			txtScriptContent.SaveToFile(_filePath, Encoding.UTF8);
+			_originalText = txtScriptContent.Text;
+			return true;
+		 }
+		 else
+		 {
+			return SaveAs("NewScript.lua");
+		 }
+	  }
 
-		private void mnuSave_Click(object sender, EventArgs e)
-		{
-			SaveScript();
-		}
-
-		private void mnuSaveAs_Click(object sender, EventArgs e)
-		{
-			SaveAs(Path.GetFileName(this._filePath));
-		}
-
-		private void mnuStop_Click(object sender, EventArgs e)
-		{
-			StopScript();
-		}
-
-		private void tmrLog_Tick(object sender, EventArgs e)
-		{
-			tmrLog.Stop();
-			if(_scriptId >= 0) {
-				string newLog = InteropEmu.DebugGetScriptLog(_scriptId);
-				if(txtLog.Text != newLog) {
-					txtLog.SuspendLayout();
-					txtLog.Text = newLog;
-					txtLog.SelectionStart = newLog.Length;
-					txtLog.ScrollToCaret();
-					txtLog.ResumeLayout();
-				}
+	  private bool SaveAs(string newName)
+	  {
+		 using (SaveFileDialog sfd = new SaveFileDialog())
+		 {
+			sfd.FileName = newName;
+			if (ConfigManager.Config.DebugInfo.RecentScripts.Count > 0)
+			{
+			   sfd.InitialDirectory = Path.GetDirectoryName(ConfigManager.Config.DebugInfo.RecentScripts[0]);
 			}
-
-			mnuSave.Enabled = txtScriptContent.Text != _originalText;
-
-			if(_filePath != null && File.Exists(_filePath) && mnuAutoReload.Checked) {
-				if(_lastTimestamp < File.GetLastWriteTime(_filePath)) {
-					if(_originalText != txtScriptContent.Text) {
-						DialogResult result = MessageBox.Show("You have unsaved changes for this script and the file has been modified by another process - would you like to discard the changes and reload the script from the disk?", "Script Window", MessageBoxButtons.YesNo);
-						if(result == DialogResult.Yes) {
-							LoadScriptFile(_filePath, true, true);
-						}
-					} else {
-						LoadScriptFile(_filePath, true, true);
-					}
-					_lastTimestamp = File.GetLastWriteTime(_filePath);
-				}
+			sfd.SetFilter("Lua scripts (*.lua)|*.lua");
+			if (sfd.ShowDialog() == DialogResult.OK)
+			{
+			   SetFilePath(sfd.FileName);
+			   txtScriptContent.SaveToFile(_filePath, Encoding.UTF8);
+			   ConfigManager.Config.DebugInfo.AddRecentScript(sfd.FileName);
+			   UpdateRecentScripts();
+			   _originalText = txtScriptContent.Text;
+			   _builtInScriptName = null;
+			   return true;
 			}
-			tmrLog.Start();
-		}
+		 }
+		 return false;
+	  }
 
-		private void mnuView_DropDownOpening(object sender, EventArgs e)
-		{
-			mnuShowLogWindow.Checked = ctrlSplit.Panel2.Height > 5;
-		}
+	  private void SetFilePath(string filePath)
+	  {
+		 _filePath = filePath;
+		 this.Text = $"{Path.GetFileName(_filePath)} - Script Window";
+	  }
 
-		private void mnuShowLogWindow_Click(object sender, EventArgs e)
-		{
-			if(mnuShowLogWindow.Checked) {
-				ctrlSplit.ExpandPanel();
-			} else {
-				ctrlSplit.CollapsePanel();
+	  private void mnuOpen_Click(object sender, EventArgs e)
+	  {
+		 LoadScript();
+	  }
+
+	  private void mnuClose_Click(object sender, EventArgs e)
+	  {
+		 this.Close();
+	  }
+
+	  private void mnuRun_Click(object sender, EventArgs e)
+	  {
+		 RunScript();
+	  }
+
+	  private void mnuSave_Click(object sender, EventArgs e)
+	  {
+		 SaveScript();
+	  }
+
+	  private void mnuSaveAs_Click(object sender, EventArgs e)
+	  {
+		 SaveAs(Path.GetFileName(this._filePath));
+	  }
+
+	  private void mnuStop_Click(object sender, EventArgs e)
+	  {
+		 StopScript();
+	  }
+
+	  private void tmrLog_Tick(object sender, EventArgs e)
+	  {
+		 tmrLog.Stop();
+		 if (_scriptId >= 0)
+		 {
+			string newLog = InteropEmu.DebugGetScriptLog(_scriptId);
+			if (txtLog.Text != newLog)
+			{
+			   txtLog.SuspendLayout();
+			   txtLog.Text = newLog;
+			   txtLog.SelectionStart = newLog.Length;
+			   txtLog.ScrollToCaret();
+			   txtLog.ResumeLayout();
 			}
-		}
+		 }
 
-		private void mnuCopy_Click(object sender, EventArgs e)
-		{
-			txtScriptContent.Copy();
-		}
+		 mnuSave.Enabled = txtScriptContent.Text != _originalText;
 
-		private void mnuCut_Click(object sender, EventArgs e)
-		{
-			txtScriptContent.Cut();
-		}
-
-		private void mnuPaste_Click(object sender, EventArgs e)
-		{
-			txtScriptContent.Paste();
-		}
-		
-		private void mnuSelectAll_Click(object sender, EventArgs e)
-		{
-			txtScriptContent.SelectAll();
-		}
-
-		private void mnuIncreaseFontSize_Click(object sender, EventArgs e)
-		{
-			txtScriptContent.Zoom += 10;
-		}
-
-		private void mnuDecreaseFontSize_Click(object sender, EventArgs e)
-		{
-			txtScriptContent.Zoom -= 10;
-		}
-
-		private void mnuResetFontSize_Click(object sender, EventArgs e)
-		{
-			txtScriptContent.Zoom = 100;
-		}
-		
-		private void mnuSelectFont_Click(object sender, EventArgs e)
-		{
-			txtScriptContent.Font = FontDialogHelper.SelectFont(txtScriptContent.OriginalFont);
-			txtScriptContent.Zoom = txtScriptContent.Zoom;
-		}
-
-		private void mnuNewScript_Click(object sender, EventArgs e)
-		{
-			DebugWindowManager.OpenScriptWindow(true);
-		}
-
-		private void mnuAutoLoadLastScript_Click(object sender, EventArgs e)
-		{
-			mnuAutoLoadLastScript.Checked = true;
-			mnuTutorialScript.Checked = false;
-			mnuBlankWindow.Checked = false;
-		}
-
-		private void mnuTutorialScript_Click(object sender, EventArgs e)
-		{
-			mnuAutoLoadLastScript.Checked = false;
-			mnuTutorialScript.Checked = true;
-			mnuBlankWindow.Checked = false;
-		}
-
-		private void mnuBlankWindow_Click(object sender, EventArgs e)
-		{
-			mnuAutoLoadLastScript.Checked = false;
-			mnuTutorialScript.Checked = false;
-			mnuBlankWindow.Checked = true;
-		}
-		
-		private void mnuApiReference_Click(object sender, EventArgs e)
-		{
-			Process.Start("https://www.mesen.ca/ApiReference.php");
-		}
-
-		private void mnuSetScriptTimeout_Click(object sender, EventArgs e)
-		{
-			using(frmSetScriptTimeout frm = new frmSetScriptTimeout()) {
-				frm.ShowDialog();
+		 if (_filePath != null && File.Exists(_filePath) && mnuAutoReload.Checked)
+		 {
+			if (_lastTimestamp < File.GetLastWriteTime(_filePath))
+			{
+			   if (_originalText != txtScriptContent.Text)
+			   {
+				  DialogResult result = MessageBox.Show("You have unsaved changes for this script and the file has been modified by another process - would you like to discard the changes and reload the script from the disk?", "Script Window", MessageBoxButtons.YesNo);
+				  if (result == DialogResult.Yes)
+				  {
+					 LoadScriptFile(_filePath, true, true);
+				  }
+			   }
+			   else
+			   {
+				  LoadScriptFile(_filePath, true, true);
+			   }
+			   _lastTimestamp = File.GetLastWriteTime(_filePath);
 			}
-		}
+		 }
+		 tmrLog.Start();
+	  }
 
-		static readonly List<List<string>> _availableFunctions = new List<List<string>>() {
+	  private void mnuView_DropDownOpening(object sender, EventArgs e)
+	  {
+		 mnuShowLogWindow.Checked = ctrlSplit.Panel2.Height > 5;
+	  }
+
+	  private void mnuShowLogWindow_Click(object sender, EventArgs e)
+	  {
+		 if (mnuShowLogWindow.Checked)
+		 {
+			ctrlSplit.ExpandPanel();
+		 }
+		 else
+		 {
+			ctrlSplit.CollapsePanel();
+		 }
+	  }
+
+	  private void mnuCopy_Click(object sender, EventArgs e)
+	  {
+		 txtScriptContent.Copy();
+	  }
+
+	  private void mnuCut_Click(object sender, EventArgs e)
+	  {
+		 txtScriptContent.Cut();
+	  }
+
+	  private void mnuPaste_Click(object sender, EventArgs e)
+	  {
+		 txtScriptContent.Paste();
+	  }
+
+	  private void mnuSelectAll_Click(object sender, EventArgs e)
+	  {
+		 txtScriptContent.SelectAll();
+	  }
+
+	  private void mnuIncreaseFontSize_Click(object sender, EventArgs e)
+	  {
+		 txtScriptContent.Zoom += 10;
+	  }
+
+	  private void mnuDecreaseFontSize_Click(object sender, EventArgs e)
+	  {
+		 txtScriptContent.Zoom -= 10;
+	  }
+
+	  private void mnuResetFontSize_Click(object sender, EventArgs e)
+	  {
+		 txtScriptContent.Zoom = 100;
+	  }
+
+	  private void mnuSelectFont_Click(object sender, EventArgs e)
+	  {
+		 txtScriptContent.Font = FontDialogHelper.SelectFont(txtScriptContent.OriginalFont);
+		 txtScriptContent.Zoom = txtScriptContent.Zoom;
+	  }
+
+	  private void mnuNewScript_Click(object sender, EventArgs e)
+	  {
+		 DebugWindowManager.OpenScriptWindow(true);
+	  }
+
+	  private void mnuAutoLoadLastScript_Click(object sender, EventArgs e)
+	  {
+		 mnuAutoLoadLastScript.Checked = true;
+		 mnuTutorialScript.Checked = false;
+		 mnuBlankWindow.Checked = false;
+	  }
+
+	  private void mnuTutorialScript_Click(object sender, EventArgs e)
+	  {
+		 mnuAutoLoadLastScript.Checked = false;
+		 mnuTutorialScript.Checked = true;
+		 mnuBlankWindow.Checked = false;
+	  }
+
+	  private void mnuBlankWindow_Click(object sender, EventArgs e)
+	  {
+		 mnuAutoLoadLastScript.Checked = false;
+		 mnuTutorialScript.Checked = false;
+		 mnuBlankWindow.Checked = true;
+	  }
+
+	  private void mnuApiReference_Click(object sender, EventArgs e)
+	  {
+		 Process.Start("https://www.mesen.ca/ApiReference.php");
+	  }
+
+	  private void mnuSetScriptTimeout_Click(object sender, EventArgs e)
+	  {
+		 using (frmSetScriptTimeout frm = new frmSetScriptTimeout())
+		 {
+			frm.ShowDialog();
+		 }
+	  }
+
+	  static readonly List<List<string>> _availableFunctions = new List<List<string>>() {
 			new List<string> {"enum", "emu", "", "", "", "", "" },
 			new List<string> {"func","emu.addEventCallback","emu.addEventCallback(function, type)","function - A Lua function.\ntype - *Enum* See eventType.","Returns an integer value that can be used to remove the callback by calling removeEventCallback.","Registers a callback function to be called whenever the specified event occurs.",},
 			new List<string> {"func","emu.removeEventCallback","emu.removeEventCallback(reference, type)","reference - The value returned by the call to addEventCallback.\ntype - *Enum* See eventType.","","Removes a previously registered callback function.",},
@@ -610,71 +677,83 @@ namespace Mesen.GUI.Debugger
 			new List<string> {"enum","emu.counterOpType.write","Returns access counter data for writes","","",""},
 			new List<string> {"enum","emu.counterOpType.exec", "Returns access counter data for executed bytes", "","",""},
 		};
-	}
+   }
 
-	public class MethodAutocompleteItem : AutocompleteItem
-	{
-		string firstPart;
-		string lastPart;
+   public class MethodAutocompleteItem : AutocompleteItem
+   {
+	  string firstPart;
+	  string lastPart;
 
-		public MethodAutocompleteItem(string text) : base(text)
-		{
-			var i = text.LastIndexOf('.');
-			if(i < 0) {
-				firstPart = text;
-			} else {
-				firstPart = text.Substring(0, i);
-				lastPart = text.Substring(i + 1);
+	  public MethodAutocompleteItem(string text) : base(text)
+	  {
+		 var i = text.LastIndexOf('.');
+		 if (i < 0)
+		 {
+			firstPart = text;
+		 }
+		 else
+		 {
+			firstPart = text.Substring(0, i);
+			lastPart = text.Substring(i + 1);
+		 }
+	  }
+
+	  public override CompareResult Compare(string fragmentText)
+	  {
+		 int i = fragmentText.LastIndexOf('.');
+
+		 if (i < 0)
+		 {
+			if (firstPart.StartsWith(fragmentText) && string.IsNullOrEmpty(lastPart))
+			{
+			   return CompareResult.VisibleAndSelected;
 			}
-		}
+			//if (firstPart.ToLower().Contains(fragmentText.ToLower()))
+			//  return CompareResult.Visible;
+		 }
+		 else
+		 {
+			var fragmentFirstPart = fragmentText.Substring(0, i);
+			var fragmentLastPart = fragmentText.Substring(i + 1);
 
-		public override CompareResult Compare(string fragmentText)
-		{
-			int i = fragmentText.LastIndexOf('.');
-
-			if(i < 0) {
-				if(firstPart.StartsWith(fragmentText) && string.IsNullOrEmpty(lastPart)) {
-					return CompareResult.VisibleAndSelected;
-				}
-				//if (firstPart.ToLower().Contains(fragmentText.ToLower()))
-				//  return CompareResult.Visible;
-			} else {
-				var fragmentFirstPart = fragmentText.Substring(0, i);
-				var fragmentLastPart = fragmentText.Substring(i + 1);
-
-				if(firstPart != fragmentFirstPart) {
-					return CompareResult.Hidden;
-				}
-
-				if(lastPart != null && lastPart.StartsWith(fragmentLastPart)) {
-					return CompareResult.VisibleAndSelected;
-				}
-
-				if(lastPart != null && lastPart.ToLower().Contains(fragmentLastPart.ToLower())) {
-					return CompareResult.Visible;
-				}
-
+			if (firstPart != fragmentFirstPart)
+			{
+			   return CompareResult.Hidden;
 			}
 
-			return CompareResult.Hidden;
-		}
-
-		public override string GetTextForReplace()
-		{
-			if(lastPart == null) {
-				return firstPart;
+			if (lastPart != null && lastPart.StartsWith(fragmentLastPart))
+			{
+			   return CompareResult.VisibleAndSelected;
 			}
 
-			return firstPart + "." + lastPart;
-		}
-
-		public override string ToString()
-		{
-			if(lastPart == null) {
-				return firstPart;
+			if (lastPart != null && lastPart.ToLower().Contains(fragmentLastPart.ToLower()))
+			{
+			   return CompareResult.Visible;
 			}
 
-			return lastPart;
-		}
-	}
+		 }
+
+		 return CompareResult.Hidden;
+	  }
+
+	  public override string GetTextForReplace()
+	  {
+		 if (lastPart == null)
+		 {
+			return firstPart;
+		 }
+
+		 return firstPart + "." + lastPart;
+	  }
+
+	  public override string ToString()
+	  {
+		 if (lastPart == null)
+		 {
+			return firstPart;
+		 }
+
+		 return lastPart;
+	  }
+   }
 }

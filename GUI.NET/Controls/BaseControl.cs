@@ -1,74 +1,88 @@
-using System.Windows.Forms;
-using System.Drawing;
-using Mesen.GUI;
 using System;
 using System.ComponentModel;
+using System.Drawing;
+using System.Windows.Forms;
 
 namespace Mesen.GUI.Controls
 {
-	public class BaseControl : UserControl
-	{
-		public static float DefaultFontSize = Program.IsMono ? 10 : 12;
+   public class BaseControl : UserControl
+   {
+	  public static float DefaultFontSize = Program.IsMono ? 10 : 12;
 
-		public static string MonospaceFontFamily
-		{
-			get
+	  public static string MonospaceFontFamily
+	  {
+		 get
+		 {
+			if (Program.IsMono)
 			{
-				if(Program.IsMono) {
-					return "monospace";
-				} else {
-					return "Consolas";
-				}
+			   return "monospace";
 			}
-		}
-
-		private static bool? _isDesignMode = null;
-		public bool IsDesignMode
-		{
-			get
+			else
 			{
-				try {
-					if(!_isDesignMode.HasValue) {
-						_isDesignMode = System.Diagnostics.Process.GetCurrentProcess().ProcessName == "devenv";
-					}
-					return _isDesignMode.Value || LicenseManager.UsageMode == LicenseUsageMode.Designtime;
-				} catch {
-					return false;
-				}
+			   return "Consolas";
 			}
-		}
+		 }
+	  }
 
-		public static Bitmap DownArrow
-		{
-			get
+	  private static bool? _isDesignMode = null;
+	  public bool IsDesignMode
+	  {
+		 get
+		 {
+			try
 			{
-				if(!Program.IsMono && Environment.OSVersion.Version >= new Version(6, 2)) {
-					return Properties.Resources.DownArrowWin10;
-				} else {
-					return ThemeHelper.IsDark ? Properties.Resources.DownArrowDarkTheme : Properties.Resources.DownArrow;
-				}
+			   if (!_isDesignMode.HasValue)
+			   {
+				  _isDesignMode = System.Diagnostics.Process.GetCurrentProcess().ProcessName == "devenv";
+			   }
+			   return _isDesignMode.Value || LicenseManager.UsageMode == LicenseUsageMode.Designtime;
 			}
-		}
+			catch
+			{
+			   return false;
+			}
+		 }
+	  }
 
-		public new AutoScaleMode AutoScaleMode
-		{
-			set {
-				if(Program.IsMono) { 
-					base.AutoScaleMode = AutoScaleMode.None;
-				} else {
-					base.AutoScaleMode = value;
-				}
+	  public static Bitmap DownArrow
+	  {
+		 get
+		 {
+			if (!Program.IsMono && Environment.OSVersion.Version >= new Version(6, 2))
+			{
+			   return Properties.Resources.DownArrowWin10;
 			}
-		}
+			else
+			{
+			   return ThemeHelper.IsDark ? Properties.Resources.DownArrowDarkTheme : Properties.Resources.DownArrow;
+			}
+		 }
+	  }
 
-		public new SizeF AutoScaleDimensions
-		{
-			set 
-			{ 
-				if(!Program.IsMono) { 
-					base.AutoScaleDimensions = value; 
-				}
+	  public new AutoScaleMode AutoScaleMode
+	  {
+		 set
+		 {
+			if (Program.IsMono)
+			{
+			   base.AutoScaleMode = AutoScaleMode.None;
 			}
-		} 		
-	}
+			else
+			{
+			   base.AutoScaleMode = value;
+			}
+		 }
+	  }
+
+	  public new SizeF AutoScaleDimensions
+	  {
+		 set
+		 {
+			if (!Program.IsMono)
+			{
+			   base.AutoScaleDimensions = value;
+			}
+		 }
+	  }
+   }
 }

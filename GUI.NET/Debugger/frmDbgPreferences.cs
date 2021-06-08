@@ -1,25 +1,18 @@
 ﻿using Mesen.GUI.Config;
 using Mesen.GUI.Forms;
 using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
-using System.Drawing;
-using System.Linq;
 using System.Reflection;
-using System.Text;
-using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace Mesen.GUI.Debugger
 {
-	public partial class frmDbgPreferences : BaseConfigForm
-	{
-		public frmDbgPreferences()
-		{
-			InitializeComponent();
+   public partial class frmDbgPreferences : BaseConfigForm
+   {
+	  public frmDbgPreferences()
+	  {
+		 InitializeComponent();
 
-			ctrlDbgShortcutsShared.Shortcuts = new FieldInfo[] {
+		 ctrlDbgShortcutsShared.Shortcuts = new FieldInfo[] {
 				GetMember(nameof(DebuggerShortcutsConfig.IncreaseFontSize)),
 				GetMember(nameof(DebuggerShortcutsConfig.DecreaseFontSize)),
 				GetMember(nameof(DebuggerShortcutsConfig.ResetFontSize)),
@@ -60,7 +53,7 @@ namespace Mesen.GUI.Debugger
 				GetMember(nameof(DebuggerShortcutsConfig.OpenPaletteViewer)),
 			};
 
-			ctrlDbgShortcutsMemoryViewer.Shortcuts = new FieldInfo[] {
+		 ctrlDbgShortcutsMemoryViewer.Shortcuts = new FieldInfo[] {
 				GetMember(nameof(DebuggerShortcutsConfig.MemoryViewer_Freeze)),
 				GetMember(nameof(DebuggerShortcutsConfig.MemoryViewer_Unfreeze)),
 				GetMember(nameof(DebuggerShortcutsConfig.MemoryViewer_AddToWatch)),
@@ -72,21 +65,21 @@ namespace Mesen.GUI.Debugger
 				GetMember(nameof(DebuggerShortcutsConfig.MemoryViewer_ViewInMemoryType))
 			};
 
-			ctrlDbgShortcutsScriptWindow.Shortcuts = new FieldInfo[] {
+		 ctrlDbgShortcutsScriptWindow.Shortcuts = new FieldInfo[] {
 				GetMember(nameof(DebuggerShortcutsConfig.ScriptWindow_OpenScript)),
 				GetMember(nameof(DebuggerShortcutsConfig.ScriptWindow_SaveScript)),
 				GetMember(nameof(DebuggerShortcutsConfig.ScriptWindow_RunScript)),
 				GetMember(nameof(DebuggerShortcutsConfig.ScriptWindow_StopScript))
 			};
 
-			ctrlDbgShortcutsPpuViewer.Shortcuts = new FieldInfo[] {
+		 ctrlDbgShortcutsPpuViewer.Shortcuts = new FieldInfo[] {
 				GetMember(nameof(DebuggerShortcutsConfig.PpuViewer_ToggleView)),
 				GetMember(nameof(DebuggerShortcutsConfig.PpuViewer_ToggleZoom)),
 				GetMember(nameof(DebuggerShortcutsConfig.PpuViewer_AddBreakpointTile)),
 				GetMember(nameof(DebuggerShortcutsConfig.PpuViewer_AddBreakpointAttribute)),
 			};
 
-			ctrlDbgShortcutsDebugger.Shortcuts = new FieldInfo[] {
+		 ctrlDbgShortcutsDebugger.Shortcuts = new FieldInfo[] {
 				GetMember(nameof(DebuggerShortcutsConfig.Reset)),
 				GetMember(nameof(DebuggerShortcutsConfig.PowerCycle)),
 				GetMember(nameof(DebuggerShortcutsConfig.Continue)),
@@ -138,32 +131,34 @@ namespace Mesen.GUI.Debugger
 				GetMember(nameof(DebuggerShortcutsConfig.ToggleVerifiedData)),
 				GetMember(nameof(DebuggerShortcutsConfig.ToggleUnidentifiedCodeData))
 			};
-		}
+	  }
 
-		private FieldInfo GetMember(string name)
-		{
-			return typeof(DebuggerShortcutsConfig).GetField(name);
-		}
+	  private FieldInfo GetMember(string name)
+	  {
+		 return typeof(DebuggerShortcutsConfig).GetField(name);
+	  }
 
-		protected override void OnFormClosed(FormClosedEventArgs e)
-		{
-			base.OnFormClosed(e);
-			if(DialogResult == DialogResult.OK) {
-				DebuggerShortcutsConfig.UpdateMenus();
-			}
-		}
+	  protected override void OnFormClosed(FormClosedEventArgs e)
+	  {
+		 base.OnFormClosed(e);
+		 if (DialogResult == DialogResult.OK)
+		 {
+			DebuggerShortcutsConfig.UpdateMenus();
+		 }
+	  }
 
-		private void btnReset_Click(object sender, EventArgs e)
-		{
-			DebuggerShortcutsConfig defaults = new DebuggerShortcutsConfig();
-			foreach(FieldInfo field in typeof(DebuggerShortcutsConfig).GetFields()) {
-				field.SetValue(ConfigManager.Config.DebugInfo.Shortcuts, field.GetValue(defaults));
-			}
-			ctrlDbgShortcutsDebugger.InitializeGrid();
-			ctrlDbgShortcutsMemoryViewer.InitializeGrid();
-			ctrlDbgShortcutsScriptWindow.InitializeGrid();
-			ctrlDbgShortcutsShared.InitializeGrid();
-			ctrlDbgShortcutsPpuViewer.InitializeGrid();
-		}
-	}
+	  private void btnReset_Click(object sender, EventArgs e)
+	  {
+		 DebuggerShortcutsConfig defaults = new DebuggerShortcutsConfig();
+		 foreach (FieldInfo field in typeof(DebuggerShortcutsConfig).GetFields())
+		 {
+			field.SetValue(ConfigManager.Config.DebugInfo.Shortcuts, field.GetValue(defaults));
+		 }
+		 ctrlDbgShortcutsDebugger.InitializeGrid();
+		 ctrlDbgShortcutsMemoryViewer.InitializeGrid();
+		 ctrlDbgShortcutsScriptWindow.InitializeGrid();
+		 ctrlDbgShortcutsShared.InitializeGrid();
+		 ctrlDbgShortcutsPpuViewer.InitializeGrid();
+	  }
+   }
 }

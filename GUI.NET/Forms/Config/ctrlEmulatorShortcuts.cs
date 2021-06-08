@@ -1,35 +1,35 @@
-﻿using System;
+﻿using Mesen.GUI.Config;
+using Mesen.GUI.Controls;
+using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Windows.Forms;
-using Mesen.GUI.Config;
-using System.Reflection;
-using Mesen.GUI.Controls;
-using System.Collections.Generic;
 
 namespace Mesen.GUI.Forms.Config
 {
-	public partial class ctrlEmulatorShortcuts : BaseControl
-	{
-		public ctrlEmulatorShortcuts()
-		{
-			InitializeComponent();
+   public partial class ctrlEmulatorShortcuts : BaseControl
+   {
+	  public ctrlEmulatorShortcuts()
+	  {
+		 InitializeComponent();
 
-			if(LicenseManager.UsageMode != LicenseUsageMode.Designtime) {
-				InitializeGrid();
-			}
-		}
+		 if (LicenseManager.UsageMode != LicenseUsageMode.Designtime)
+		 {
+			InitializeGrid();
+		 }
+	  }
 
-		protected override void OnResize(EventArgs e)
-		{
-			base.OnResize(e);
-			this.colAction.Width = (int)(this.Width / 2.2);
-			this.colBinding1.Width = this.Width / 4;
-			this.colBinding2.Width = this.Width / 4;
-		}
+	  protected override void OnResize(EventArgs e)
+	  {
+		 base.OnResize(e);
+		 this.colAction.Width = (int)(this.Width / 2.2);
+		 this.colBinding1.Width = this.Width / 4;
+		 this.colBinding2.Width = this.Width / 4;
+	  }
 
-		private void InitializeGrid()
-		{
-			EmulatorShortcut[] displayOrder = new EmulatorShortcut[] {
+	  private void InitializeGrid()
+	  {
+		 EmulatorShortcut[] displayOrder = new EmulatorShortcut[] {
 				EmulatorShortcut.FastForward,
 				EmulatorShortcut.ToggleFastForward,
 				EmulatorShortcut.Rewind,
@@ -84,7 +84,7 @@ namespace Mesen.GUI.Forms.Config
 				EmulatorShortcut.ToggleSprites,
 				EmulatorShortcut.ToggleCheats,
 				EmulatorShortcut.ToggleKeyboardMode,
-				
+
 				EmulatorShortcut.ToggleAudio,
 				EmulatorShortcut.IncreaseVolume,
 				EmulatorShortcut.DecreaseVolume,
@@ -94,7 +94,7 @@ namespace Mesen.GUI.Forms.Config
 				EmulatorShortcut.DecreaseSpeed,
 
 				EmulatorShortcut.OpenFile,
-								
+
 				EmulatorShortcut.MoveToNextStateSlot,
 				EmulatorShortcut.MoveToPreviousStateSlot,
 				EmulatorShortcut.SaveState,
@@ -141,100 +141,118 @@ namespace Mesen.GUI.Forms.Config
 				EmulatorShortcut.LoadLastSession,
 			};
 
-			HashSet<string> keyCombinations = new HashSet<string>();
+		 HashSet<string> keyCombinations = new HashSet<string>();
 
-			foreach(EmulatorShortcut shortcut in displayOrder) {
-				int i = gridShortcuts.Rows.Add();
-				gridShortcuts.Rows[i].Cells[0].Tag = shortcut;
-				gridShortcuts.Rows[i].Cells[0].Value = ResourceHelper.GetMessage("EmulatorShortcutMappings_" + shortcut.ToString());
+		 foreach (EmulatorShortcut shortcut in displayOrder)
+		 {
+			int i = gridShortcuts.Rows.Add();
+			gridShortcuts.Rows[i].Cells[0].Tag = shortcut;
+			gridShortcuts.Rows[i].Cells[0].Value = ResourceHelper.GetMessage("EmulatorShortcutMappings_" + shortcut.ToString());
 
-				int keyIndex = ConfigManager.Config.PreferenceInfo.ShortcutKeys1.FindIndex((ShortcutKeyInfo shortcutInfo) => shortcutInfo.Shortcut == shortcut);
-				if(keyIndex >= 0) {
-					KeyCombination keyComb = ConfigManager.Config.PreferenceInfo.ShortcutKeys1[keyIndex].KeyCombination;
-					keyCombinations.Add(keyComb.ToString());
-					gridShortcuts.Rows[i].Cells[1].Value = keyComb.ToString();
-					gridShortcuts.Rows[i].Cells[1].Tag = keyComb;
-				}
-
-				keyIndex = ConfigManager.Config.PreferenceInfo.ShortcutKeys2.FindIndex((ShortcutKeyInfo shortcutInfo) => shortcutInfo.Shortcut == shortcut);
-				if(keyIndex >= 0) {
-					KeyCombination keyComb = ConfigManager.Config.PreferenceInfo.ShortcutKeys2[keyIndex].KeyCombination;
-					keyCombinations.Add(keyComb.ToString());
-					gridShortcuts.Rows[i].Cells[2].Value = keyComb.ToString();
-					gridShortcuts.Rows[i].Cells[2].Tag = keyComb;
-				}
+			int keyIndex = ConfigManager.Config.PreferenceInfo.ShortcutKeys1.FindIndex((ShortcutKeyInfo shortcutInfo) => shortcutInfo.Shortcut == shortcut);
+			if (keyIndex >= 0)
+			{
+			   KeyCombination keyComb = ConfigManager.Config.PreferenceInfo.ShortcutKeys1[keyIndex].KeyCombination;
+			   keyCombinations.Add(keyComb.ToString());
+			   gridShortcuts.Rows[i].Cells[1].Value = keyComb.ToString();
+			   gridShortcuts.Rows[i].Cells[1].Tag = keyComb;
 			}
 
-			CheckConflicts();
-		}
-
-		private void CheckConflicts()
-		{
-			HashSet<string> keyCombinations = new HashSet<string>();
-
-			for(int i = gridShortcuts.Rows.Count - 1; i >= 0; i--) {
-				EmulatorShortcut shortcut = (EmulatorShortcut)gridShortcuts.Rows[i].Cells[0].Tag;
-				for(int j = 1; j <= 2; j++) {
-					if(gridShortcuts.Rows[i].Cells[j].Tag != null) {
-						KeyCombination keyComb = (KeyCombination)gridShortcuts.Rows[i].Cells[j].Tag;
-						if(!keyComb.IsEmpty && !keyCombinations.Add(keyComb.ToString())) {
-							pnlConflictWarning.Visible = true;
-							return;
-						}
-					}
-				}
+			keyIndex = ConfigManager.Config.PreferenceInfo.ShortcutKeys2.FindIndex((ShortcutKeyInfo shortcutInfo) => shortcutInfo.Shortcut == shortcut);
+			if (keyIndex >= 0)
+			{
+			   KeyCombination keyComb = ConfigManager.Config.PreferenceInfo.ShortcutKeys2[keyIndex].KeyCombination;
+			   keyCombinations.Add(keyComb.ToString());
+			   gridShortcuts.Rows[i].Cells[2].Value = keyComb.ToString();
+			   gridShortcuts.Rows[i].Cells[2].Tag = keyComb;
 			}
-			
-			pnlConflictWarning.Visible = false;
-		}
+		 }
 
-		public void UpdateConfig()
-		{
-			//Need to box the structs into objects for SetValue to work properly
-			var keySet1 = new List<ShortcutKeyInfo>();
-			var keySet2 = new List<ShortcutKeyInfo>();
+		 CheckConflicts();
+	  }
 
-			for(int i = gridShortcuts.Rows.Count - 1; i >= 0; i--) {
-				EmulatorShortcut shortcut = (EmulatorShortcut)gridShortcuts.Rows[i].Cells[0].Tag;
-				if(gridShortcuts.Rows[i].Cells[1].Tag != null) {
-					KeyCombination keyComb = (KeyCombination)gridShortcuts.Rows[i].Cells[1].Tag;
-					if(!keyComb.IsEmpty) {
-						keySet1.Add(new ShortcutKeyInfo(shortcut, keyComb));
-					}
-				}
-				if(gridShortcuts.Rows[i].Cells[2].Tag != null) {
-					KeyCombination keyComb = (KeyCombination)gridShortcuts.Rows[i].Cells[2].Tag;
-					if(!keyComb.IsEmpty) {
-						keySet2.Add(new ShortcutKeyInfo(shortcut, keyComb));
-					}
-				}
+	  private void CheckConflicts()
+	  {
+		 HashSet<string> keyCombinations = new HashSet<string>();
+
+		 for (int i = gridShortcuts.Rows.Count - 1; i >= 0; i--)
+		 {
+			EmulatorShortcut shortcut = (EmulatorShortcut)gridShortcuts.Rows[i].Cells[0].Tag;
+			for (int j = 1; j <= 2; j++)
+			{
+			   if (gridShortcuts.Rows[i].Cells[j].Tag != null)
+			   {
+				  KeyCombination keyComb = (KeyCombination)gridShortcuts.Rows[i].Cells[j].Tag;
+				  if (!keyComb.IsEmpty && !keyCombinations.Add(keyComb.ToString()))
+				  {
+					 pnlConflictWarning.Visible = true;
+					 return;
+				  }
+			   }
 			}
+		 }
 
-			ConfigManager.Config.PreferenceInfo.ShortcutKeys1 = keySet1;
-			ConfigManager.Config.PreferenceInfo.ShortcutKeys2 = keySet2;
-		}
+		 pnlConflictWarning.Visible = false;
+	  }
 
-		private void gridShortcuts_CellMouseDown(object sender, DataGridViewCellMouseEventArgs e)
-		{
-			//Right-click on buttons to clear mappings
-			if(gridShortcuts.Columns[e.ColumnIndex] is DataGridViewButtonColumn && e.RowIndex >= 0) {
-				DataGridViewButtonCell button = gridShortcuts.Rows[e.RowIndex].Cells[e.ColumnIndex] as DataGridViewButtonCell;
-				if(button != null) {
-					if(e.Button == MouseButtons.Right) {
-						button.Value = "";
-						button.Tag = new KeyCombination();
-						CheckConflicts();
-					} else if(e.Button == MouseButtons.Left) {
-						using(frmGetKey frm = new frmGetKey(false)) {
-							((Form)frm).ShowDialog(this);
-							button.Value = frm.ShortcutKey.ToString();
-							button.Tag = frm.ShortcutKey;
+	  public void UpdateConfig()
+	  {
+		 //Need to box the structs into objects for SetValue to work properly
+		 var keySet1 = new List<ShortcutKeyInfo>();
+		 var keySet2 = new List<ShortcutKeyInfo>();
 
-							CheckConflicts();
-						}
-					}
-				}
+		 for (int i = gridShortcuts.Rows.Count - 1; i >= 0; i--)
+		 {
+			EmulatorShortcut shortcut = (EmulatorShortcut)gridShortcuts.Rows[i].Cells[0].Tag;
+			if (gridShortcuts.Rows[i].Cells[1].Tag != null)
+			{
+			   KeyCombination keyComb = (KeyCombination)gridShortcuts.Rows[i].Cells[1].Tag;
+			   if (!keyComb.IsEmpty)
+			   {
+				  keySet1.Add(new ShortcutKeyInfo(shortcut, keyComb));
+			   }
 			}
-		}
-	}
+			if (gridShortcuts.Rows[i].Cells[2].Tag != null)
+			{
+			   KeyCombination keyComb = (KeyCombination)gridShortcuts.Rows[i].Cells[2].Tag;
+			   if (!keyComb.IsEmpty)
+			   {
+				  keySet2.Add(new ShortcutKeyInfo(shortcut, keyComb));
+			   }
+			}
+		 }
+
+		 ConfigManager.Config.PreferenceInfo.ShortcutKeys1 = keySet1;
+		 ConfigManager.Config.PreferenceInfo.ShortcutKeys2 = keySet2;
+	  }
+
+	  private void gridShortcuts_CellMouseDown(object sender, DataGridViewCellMouseEventArgs e)
+	  {
+		 //Right-click on buttons to clear mappings
+		 if (gridShortcuts.Columns[e.ColumnIndex] is DataGridViewButtonColumn && e.RowIndex >= 0)
+		 {
+			DataGridViewButtonCell button = gridShortcuts.Rows[e.RowIndex].Cells[e.ColumnIndex] as DataGridViewButtonCell;
+			if (button != null)
+			{
+			   if (e.Button == MouseButtons.Right)
+			   {
+				  button.Value = "";
+				  button.Tag = new KeyCombination();
+				  CheckConflicts();
+			   }
+			   else if (e.Button == MouseButtons.Left)
+			   {
+				  using (frmGetKey frm = new frmGetKey(false))
+				  {
+					 ((Form)frm).ShowDialog(this);
+					 button.Value = frm.ShortcutKey.ToString();
+					 button.Tag = frm.ShortcutKey;
+
+					 CheckConflicts();
+				  }
+			   }
+			}
+		 }
+	  }
+   }
 }
