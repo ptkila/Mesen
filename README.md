@@ -2,7 +2,7 @@
 
 Mesen is a cross-platform NES/Famicom emulator for Windows & Linux built in C++ and C#.
 
-If you want to support this project, please consider making a donation:
+If you want to support this project, please consider making a donation for it's original author:
 
 [![Donate](https://www.mesen.ca/images/donate.png)](https://www.mesen.ca/Donate.php)
 
@@ -11,6 +11,10 @@ If you want to support this project, please consider making a donation:
 
 ## Development Builds
 
+[WIP]
+
+<!---
+
 Development builds of the latest commit are available from Appveyor. For stable release builds, see the **Releases** section below.
 
 **Warning:** These are development builds and may be ***unstable***. Using them may also increase the chances of your settings being corrupted, or having issues when upgrading to the next official release. Additionally, these builds are currently not optimized via PGO and will typically run 20-30% slower than the official release builds.
@@ -18,6 +22,8 @@ Development builds of the latest commit are available from Appveyor. For stable 
 Windows: [![Build status](https://ci.appveyor.com/api/projects/status/d4i7rqbfi386wdyw/branch/master?svg=true)](https://ci.appveyor.com/project/Sour/mesen/build/artifacts)
 
 Linux: [![Build status](https://ci.appveyor.com/api/projects/status/uuoxwu7o5kkqjp4e/branch/master?svg=true)](https://ci.appveyor.com/project/Sour/mesen-nyf7v/build/artifacts)
+
+-->
 
 ## Releases
 
@@ -46,11 +52,19 @@ Packages are available here: <https://aur.archlinux.org/packages/mesen>
 
 ## Roadmap
 
+[WIP]
+
+<!--
+
+## Roadmap
+
 Things that ***may or may not*** be added in the future, in no particular order:
 
 * Support for more UNIF boards and more NES/Famicom input devices
 * Shaders
 * TAS editor
+
+-->
 
 ## Compiling
 
